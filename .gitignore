@@ -1,0 +1,20 @@
+# Secrets - never commit
+.env
+*.env
+!.env.example
+
+# Installed at runtime, never part of the repo
+node_modules/
+package-lock.json
+
+# Local scratch
+*.log
+*.bak
+_sandbox-*.ps1
+__pycache__/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

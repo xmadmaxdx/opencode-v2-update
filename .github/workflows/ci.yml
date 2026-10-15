@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PowerShell syntax check
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in @('install.ps1', 'Upgrade-OpenCode.ps1')) {
+            $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f).Path, [ref]$null, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              Write-Host "::error::$f failed to parse"
+              $errors | ForEach-Object { Write-Host "  line $($_.Extent.StartLineNumber): $($_.Message)" }
+              $failed = $true
+            } else { Write-Host "ok: $f parses" }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Validate payload config is valid JSONC
+        shell: pwsh
+        run: |
+          $raw = Get-Content payload\config\opencode.jsonc -Raw
+          $stripped = ($raw -split "`r?`n" | Where-Object { $_ -notmatch '^\s*//' }) -join "`n"
+          $null = $stripped | ConvertFrom-Json
+          Write-Host "ok: opencode.jsonc is valid JSONC"
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash syntax check
+        run: |
+          for f in install.sh Upgrade-OpenCode.sh INSTALL.command test-install.sh; do
+            bash -n "$f" && echo "ok: $f parses"
+          done
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning install.sh Upgrade-OpenCode.sh INSTALL.command test-install.sh
+
+      - name: unit tests
+        run: bash test-install.sh
+
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No credentials in the repository
+        shell: bash
+        run: |
+          set -uo pipefail
+          failed=0
+          while IFS= read -r line; do
+            file="${line%%:*}"; rest="${line#*:}"; lineno="${rest%%:*}"
+            echo "::error::credential-shaped value in $file line $lineno"
+            failed=1
+          done < <(grep -rInE \
+            'github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|sbp_[A-Za-z0-9]{20,}|nfp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}' \
+            . --exclude-dir=.git || true)
+          if [ "$failed" -ne 0 ]; then exit 1; fi
+          echo "ok: no credentials found"
+
+      - name: No personal files shipped in the payload
+        shell: bash
+        run: |
+          bad=0
+          for f in AGENTS.md cli.json tui.json lsp-install-decisions.json .env .env.example; do
+            [ -e "payload/config/$f" ] && { echo "::error::payload/config/$f must not ship"; bad=1; }
+          done
+          for d in agents commands skills; do
+            [ -d "payload/config/$d" ] && { echo "::error::payload/config/$d/ must not ship"; bad=1; }
+          done
+          [ "$bad" -ne 0 ] && exit 1
+          echo "ok: payload ships config only"
+
+      - name: Payload config carries no providers or MCP servers
+        shell: bash
+        run: |
+          bad=0
+          for key in '"mcp"' '"provider"' '"agent"' '"permission"' '"plugins"'; do
+            if grep -qF "$key" payload/config/opencode.jsonc; then
+              echo "::error::payload config should not contain $key"
+              bad=1
+            fi
+          done
+          [ "$bad" -ne 0 ] && exit 1
+          echo "ok: payload config is a bare baseline"
+
+      - name: README internal links resolve
+        shell: bash
+        run: |
+          bad=0
+          for link in $(grep -oE '\]\((docs/[^)#]+|[A-Za-z0-9._-]+\.md|LICENSE)\)' README.md | tr -d ']()' ); do
+            [ -e "$link" ] || { echo "::error::README links to missing file: $link"; bad=1; }
+          done
+          [ "$bad" -ne 0 ] && exit 1
+          echo "ok: README links resolve"

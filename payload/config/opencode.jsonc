@@ -1,0 +1,13 @@
+﻿{
+  // Baseline config shipped by opencode-v2-update.
+  //
+  // This file is intentionally almost empty. It carries no providers, no MCP
+  // servers, no agents and no permissions, because those are personal: a
+  // template that ships them either collides with yours or silently replaces
+  // them.
+  //
+  // Add what you actually use - see docs/troubleshooting.md for the shape of
+  // each block, and README.md for why nothing here is overwritten.
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": true
+}

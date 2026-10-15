@@ -1,0 +1,24 @@
+# Normalise line endings so shell scripts never get CRLF on Linux, which
+# breaks them with "bad interpreter: /usr/bin/env bash^M".
+* text=auto eol=lf
+
+# Windows entry points keep CRLF.
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Shell entry points must be LF everywhere.
+*.sh        text eol=lf
+install.sh        text eol=lf
+Upgrade-OpenCode.sh text eol=lf
+INSTALL.command   text eol=lf
+
+# Documentation and data stay LF.
+*.md      text eol=lf
+*.txt     text eol=lf
+*.json    text eol=lf
+*.jsonc   text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.cjs     text eol=lf
+*.mjs     text eol=lf
